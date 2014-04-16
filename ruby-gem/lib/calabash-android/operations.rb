@@ -858,7 +858,8 @@ module Operations
   end
 
   def backdoor(sel, arg)
-    ni
+    # for android results are returned in bonusInformation
+    performAction('backdoor', sel, arg)["bonusInformation"].first
   end
 
   def map(query, method_name, *method_args)
