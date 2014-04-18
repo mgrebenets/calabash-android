@@ -18,6 +18,8 @@ import sh.calaba.instrumentationbackend.query.UIQueryResultVoid;
 
 public class Backdoor implements Action {
 
+	private static final String TAG = "Backdoor";
+
 	@Override
 	public Result execute(String... args) {
 		if (args.length != 2) {
@@ -35,7 +37,7 @@ public class Backdoor implements Action {
 		try {
 			backdoorResult = (String)op.apply(app);
 		} catch (Exception e) {
-			e.printStackTrace();
+			android.util.Log.e(TAG, android.util.Log.getStackTraceString(e));
 			return Result.failedResult("No such backdoor method found: public String " + op.getName() + "(String arg)");
 		}
 
