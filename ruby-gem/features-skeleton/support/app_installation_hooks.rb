@@ -6,19 +6,20 @@ end
 
 Before do |scenario|
   @scenario_is_outline = (scenario.class == Cucumber::Ast::OutlineTable::ExampleRow)
-  if @scenario_is_outline 
-    scenario = scenario.scenario_outline 
-  end 
+  if @scenario_is_outline
+    scenario = scenario.scenario_outline
+  end
 
   feature_name = scenario.feature.title
-  if FeatureNameMemory.feature_name != feature_name \
-      or ENV["RESET_BETWEEN_SCENARIOS"] == "1"
+  if (FeatureNameMemory.feature_name != feature_name \
+      && ENV["RESET_BETWEEN_FEATURES"] == "1") \
+      || ENV["RESET_BETWEEN_SCENARIOS"] == "1"
     if ENV["RESET_BETWEEN_SCENARIOS"] == "1"
       log "New scenario - reinstalling apps"
     else
       log "First scenario in feature - reinstalling apps"
     end
-    
+
     uninstall_apps
     install_app(ENV["TEST_APP_PATH"])
     install_app(ENV["APP_PATH"])
