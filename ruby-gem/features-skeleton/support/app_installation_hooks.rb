@@ -11,9 +11,16 @@ Before do |scenario|
   end
 
   feature_name = scenario.feature.title
-  if (FeatureNameMemory.feature_name != feature_name \
+  if ((FeatureNameMemory.feature_name != feature_name \
       && ENV["RESET_BETWEEN_FEATURES"] == "1") \
-      || ENV["RESET_BETWEEN_SCENARIOS"] == "1"
+      || ENV["RESET_BETWEEN_SCENARIOS"] == "1")
+
+    log "Installing the app from the hook...."
+    log "Feature name: #{feature_name}"
+    log "Saved feature name: #{FeatureNameMemory.feature_name}"
+    log "RESET_BETWEEN_FEATURES: #{ENV['RESET_BETWEEN_FEATURES']}"
+    log "RESET_BETWEEN_SCENARIOS: #{ENV['RESET_BETWEEN_SCENARIOS']}"
+
     if ENV["RESET_BETWEEN_SCENARIOS"] == "1"
       log "New scenario - reinstalling apps"
     else
