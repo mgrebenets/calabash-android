@@ -873,7 +873,8 @@ module Operations
         :arguments => method_args
     }
     res = http("/map",
-               {:query => query, :operation => operation_map})
+               {:query => query, :operation => operation_map},
+               {:read_timeout => 350, :send_timout => 350})
     res = JSON.parse(res)
     if res['outcome'] != 'SUCCESS'
       screenshot_and_raise "map #{query}, #{method_name} failed because: #{res['reason']}\n#{res['details']}"
