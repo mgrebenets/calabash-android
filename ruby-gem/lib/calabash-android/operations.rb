@@ -247,7 +247,7 @@ module Operations
 
     def app_running?
       begin
-        http("/ping") == "pong"
+        http("/ping", {}, { :read_timeout => 350 }) == "pong"
       rescue
         false
       end
@@ -511,7 +511,7 @@ module Operations
             log "Checking if instrumentation backend is ready"
 
             log "Is app running? #{app_running?}"
-            ready = http("/ready", {}, {:read_timeout => 1})
+            ready = http("/ready", {}, {:read_timeout => 50})
             if ready != "true"
               log "Instrumentation backend not yet ready"
               raise "Not ready"
