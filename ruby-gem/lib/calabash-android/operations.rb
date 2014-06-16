@@ -247,7 +247,7 @@ module Operations
 
     def app_running?
       begin
-        http("/ping", {}, { :read_timeout => 350 }) == "pong"
+        http("/ping") == "pong"
       rescue
         false
       end
@@ -266,7 +266,7 @@ module Operations
 
       Timeout.timeout(300) do
         begin
-          result = http("/", params, {:read_timeout => 350})
+          result = http("/", params)
         rescue Exception => e
           log "Error communicating with test server: #{e}"
           raise e
@@ -353,9 +353,9 @@ module Operations
 
     def configure_http(http, options)
       return unless http
-      http.connect_timeout = options[:open_timeout] || 15
-      http.send_timeout = options[:send_timeout] || 15
-      http.receive_timeout = options[:read_timeout] || 15
+      http.connect_timeout = options[:open_timeout] || 350
+      http.send_timeout = options[:send_timeout] || 350
+      http.receive_timeout = options[:read_timeout] || 350
       if options.has_key?(:debug) && options[:debug]
         http.debug_dev= $stdout
       else
@@ -511,7 +511,7 @@ module Operations
             log "Checking if instrumentation backend is ready"
 
             log "Is app running? #{app_running?}"
-            ready = http("/ready", {}, {:read_timeout => 50})
+            ready = http("/ready")
             if ready != "true"
               log "Instrumentation backend not yet ready"
               raise "Not ready"
