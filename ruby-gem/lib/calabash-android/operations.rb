@@ -49,6 +49,21 @@ module Operations
   end
 
   def performAction(action, *arguments)
+    puts "Warning: The method performAction is deprecated. Please use perform_action instead."
+
+    perform_action(action, *arguments)
+  end
+
+  def perform_action(action, *arguments)
+    @removed_actions = File.readlines(File.join(File.dirname(__FILE__), 'removed_actions.txt')) unless @removed_actions
+    @removed_actions.map! &:chomp
+
+    if @removed_actions.include?(action)
+      puts "\e[31mError: The action '#{action}' was removed in calabash-android 0.5\e[0m"
+      puts 'Solutions that do not require the removed action can be found on:'
+      puts "\e[36mhttps://github.com/calabash/calabash-android/blob/master/migrating_to_calabash_0.5.md\##{action}\e[0m"
+    end
+    
     default_device.perform_action(action, *arguments)
   end
 
@@ -134,12 +149,22 @@ module Operations
     converted_args = []
     args.each do |arg|
       if arg.is_a?(Hash) and arg.count == 1
-        converted_args << {:method_name => arg.keys.first, :arguments => [ arg.values.first ]}
+        if arg.values.is_a?(Array) && arg.values.count == 1
+          values = arg.values.flatten
+        else
+          values = [arg.values]
+        end
+
+        converted_args << {:method_name => arg.keys.first, :arguments => values}
       else
         converted_args << arg
       end
     end
     map(uiquery,:query,*converted_args)
+  end
+
+  def flash(query_string)
+    map(query_string, :flash)
   end
 
   def each_item(opts={:query => "android.widget.ListView", :post_scroll => 0.2}, &block)
@@ -441,8 +466,8 @@ module Operations
 
     def connected_devices
       lines = `#{Env.adb_path} devices`.split("\n")
-      lines.shift
-      lines.collect { |l| l.split("\t").first}
+      start_index = lines.index{ |x| x =~ /List of devices attached/ } + 1
+      lines[start_index..-1].collect { |l| l.split("\t").first }
     end
 
     def wake_up
@@ -704,50 +729,98 @@ module Operations
     raise(msg)
   end
 
+  def has_text?(text)
+    !query("* {text CONTAINS[c] '#{text}'}").empty?
+  end
+
+  def assert_text(text, should_find = true)
+    raise "Text \"#{text}\" was #{should_find ? 'not ' : ''}found." if has_text?(text) ^ should_find
+
+    true
+  end
+
   def double_tap(uiquery, options = {})
     center_x, center_y = find_coordinate(uiquery)
 
-    performAction("double_tap_coordinate", center_x, center_y)
+    perform_action("double_tap_coordinate", center_x, center_y)
   end
 
+  # Performs a "long press" operation on a selected view
+  # Params:
+  # +uiquery+: a uiquery identifying one view
+  # +options[:length]+: the length of the long press in milliseconds (optional)
+  #
+  # Examples:
+  #   - long_press("* id:'my_id'")
+  #   - long_press("* id:'my_id'", {:length=>5000})
   def long_press(uiquery, options = {})
     center_x, center_y = find_coordinate(uiquery)
-
-    performAction("long_press_coordinate", center_x, center_y)
+    length = options[:length]
+    perform_action("long_press_coordinate", center_x, center_y, *(length unless length.nil?))
   end
 
   def touch(uiquery, options = {})
     center_x, center_y = find_coordinate(uiquery)
 
-    performAction("touch_coordinate", center_x, center_y)
+    perform_action("touch_coordinate", center_x, center_y)
   end
 
   def keyboard_enter_text(text, options = {})
-    performAction('keyboard_enter_text', text)
+    perform_action('keyboard_enter_text', text)
+  end
+
+  def keyboard_enter_char(character, options = {})
+    keyboard_enter_text(character[0,1], options)
   end
 
   def enter_text(uiquery, text, options = {})
-    touch(uiquery, options)
+    tap_when_element_exists(uiquery, options)
     sleep 0.5
     keyboard_enter_text(text, options)
+  end
+
+  def clear_text(query_string, options={})
+    result = query(query_string, setText: '')
+
+    raise "No elements found. Query: #{query_string}" if result.empty?
+
+    true
+  end
+
+  def hide_soft_keyboard
+    perform_action('hide_soft_keyboard')
   end
 
   def find_coordinate(uiquery)
     raise "Cannot find nil" unless uiquery
 
-    if uiquery.instance_of? String
-      elements = query(uiquery)
-      raise "No elements found. Query: #{uiquery}" if elements.empty?
-      element = elements.first
-    else
-      element = uiquery
-      element = element.first if element.instance_of?(Array)
-    end
+    element = execute_uiquery(uiquery)
+
+    raise "No elements found. Query: #{uiquery}" if element.nil?
 
     center_x = element["rect"]["center_x"]
     center_y = element["rect"]["center_y"]
 
     [center_x, center_y]
+  end
+
+  def execute_uiquery(uiquery)
+    if uiquery.instance_of? String
+      elements = query(uiquery)
+
+      return elements.first unless elements.empty?
+    else
+      elements = uiquery
+
+      return elements.first if elements.instance_of?(Array)
+      return elements if elements.instance_of?(Hash)
+    end
+
+    nil
+  end
+
+  def step_deprecated
+    puts 'Warning: This predefined step is deprecated.'
   end
 
   def http(path, data = {}, options = {})
@@ -759,16 +832,52 @@ module Operations
   end
 
   def set_text(uiquery, txt)
-    view,arguments = uiquery.split(" ",2)
-    raise "Currently queries are only supported for webviews" unless view.downcase == "webview"
+    puts "set_text is deprecated. Use enter_text instead"
+    enter_text(uiquery, txt)
+  end
 
-    if arguments =~ /(css|xpath):\s*(.*)/
-      r = performAction("set_text", $1, $2, txt)
+  def press_back_button
+    perform_action('go_back')
+  end
+
+  def press_menu_button
+    perform_action('press_menu')
+  end
+
+  def select_options_menu_item(identifier, options={})
+    press_menu_button
+    tap_when_element_exists("DropDownListView * marked:'#{identifier}'", options)
+  end
+
+  def select_context_menu_item(view_uiquery, menu_item_query_string)
+    long_press(view_uiquery)
+
+    container_class = 'com.android.internal.view.menu.ListMenuItemView'
+    wait_for_element_exists(container_class)
+
+    combined_query_string = "#{container_class} descendant #{menu_item_query_string}"
+    touch(combined_query_string)
+  end
+
+  def tap_when_element_exists(query_string, options={})
+    options.merge!({action: lambda {|q| touch(q)}})
+
+    if options[:scroll] == true
+      scroll_to(query_string, options)
     else
-     raise "Invalid query #{arguments}"
+      when_element_exists(query_string, options)
     end
   end
 
+  def long_press_when_element_exists(query_string, options={})
+    options.merge!({action: lambda {|q| long_press(q)}})
+
+    if options[:scroll] == true
+      scroll_to(query_string, options)
+    else
+      when_element_exists(query_string, options)
+    end
+  end
 
   def swipe(dir,options={})
       ni
@@ -782,8 +891,82 @@ module Operations
     ni
   end
 
-  def scroll(uiquery,direction)
-    ni
+  def scroll_up
+    scroll("android.widget.ScrollView", :up)
+  end
+
+  def scroll_down
+    scroll("android.widget.ScrollView", :down)
+  end
+
+  def scroll(query_string, direction)
+    if direction != :up && direction != :down
+      raise 'Only upwards and downwards scrolling is supported for now'
+    end
+
+    scroll_x = 0
+    scroll_y = 0
+
+    action = lambda do
+      element = query(query_string).first
+      raise "No elements found. Query: #{query_string}" if element.nil?
+
+      width = element['rect']['width']
+      height = element['rect']['height']
+
+      if direction == :up
+        scroll_y = -height/2
+      else
+        scroll_y = height/2
+      end
+
+      query(query_string, {scrollBy: [scroll_x.to_i, scroll_y.to_i]})
+    end
+
+    when_element_exists(query_string, action: action)
+  end
+
+  def scroll_to(query_string, options={})
+    options[:action] ||= lambda {}
+
+    all_query_string = query_string
+
+    unless all_query_string.chomp.downcase.start_with?('all')
+      all_query_string = "all #{all_query_string}"
+    end
+
+    wait_for_element_exists(all_query_string)
+
+    visibility_query_string = all_query_string[4..-1]
+
+    unless query(visibility_query_string).empty?
+      when_element_exists(visibility_query_string, options)
+      return
+    end
+
+    element = query(all_query_string).first
+    raise "No elements found. Query: #{all_query_string}" if element.nil?
+    element_center_y = element['rect']['center_y']
+
+    scroll_view_query_string = "#{all_query_string} parent android.widget.ScrollView index:0"
+    scroll_element = query(scroll_view_query_string).first
+
+    raise "Could not find parent scroll view. Query: #{scroll_view_query_string}" if element.nil?
+
+    scroll_element_y = scroll_element['rect']['y']
+    scroll_element_height = scroll_element['rect']['height']
+
+    if element_center_y > scroll_element_y + scroll_element_height
+      scroll_by_y = element_center_y - (scroll_element_y + scroll_element_height) + 2
+    else
+      scroll_by_y = element_center_y - scroll_element_y - 2
+    end
+
+    result = query(scroll_view_query_string, {scrollBy: [0, scroll_by_y.to_i]}).first
+    raise 'Could not scroll parent view' if result != '<VOID>'
+
+    visibility_query_string = all_query_string[4..-1]
+    when_element_exists(visibility_query_string, options)
   end
 
   def scroll_to_row(uiquery,number)
@@ -858,7 +1041,13 @@ module Operations
   end
 
   def backdoor(sel, arg)
-    ni
+    result = perform_action("backdoor", sel, arg)
+    if !result["success"]
+      screenshot_and_raise(result["message"])
+    end
+
+    # for android results are returned in bonusInformation
+    result["bonusInformation"].first
   end
 
   def map(query, method_name, *method_args)
